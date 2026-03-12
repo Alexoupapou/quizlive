@@ -2285,7 +2285,7 @@ $('apin-input').onkeydown=e=>{if(e.key==='Enter')checkAdminPin();};
 // ══════════════════════════════════════════
 //  PRESENTER (projecteur)
 // ══════════════════════════════════════════
-let presState=null;           // dernier état Firebase connu
+let presState=null,autoRevealPending=false;           // dernier état Firebase connu
 let presTimerIv=null;         // interval timer bar
 let wcWords={};               // mots wordcloud
 let spaceReady=false;         // espace autorisé pour avancer
@@ -2324,6 +2324,23 @@ async function pollPres(){
     // Wordcloud live
     const q=QUESTIONS[game.currentQuestion];
     if(q&&q.type==='wordcloud')updateWCLive(pl,game.currentQuestion);
+    // Auto-reveal si tous ont répondu
+    if(game.currentQuestion>=0){
+      const playerList=Object.values(pl);
+      if(playerList.length>0){
+        const allAnswered=playerList.every(p=>(p.answeredCount||0)>game.currentQuestion);
+        if(allAnswered&&!autoRevealPending){
+          autoRevealPending=true;
+          setTimeout(async()=>{
+            const g=await fbGet('game');
+            if(g&&g.status==='question'&&g.currentQuestion===game.currentQuestion){
+              await fbPatch('game',{status:'answer_reveal'});
+            }
+            autoRevealPending=false;
+          },1500);
+        }
+      }
+    }
   } else if(game.status==='leaderboard'||game.status==='answer_reveal'){
     renderPres(game,pl);
   }
@@ -2354,7 +2371,7 @@ function renderLobby(pin,players){
       <div class="space-hint">▶ ESPACE POUR LANCER LE QUIZ</div>
     </div>`;
   if(!document.querySelector('#lobby-qr canvas')){
-    try{new QRCode($('lobby-qr'),{text:url,width:130,height:130,colorDark:'#C8A951',colorLight:'#0A0E1A'});}catch{}
+    try{new QRCode($('lobby-qr'),{text:url,width:200,height:200,colorDark:'#C8A951',colorLight:'#0A0E1A'});}catch{}
   }
   $('pres-timer-bar').style.width='100%';
   $('bottom-hint').textContent='ESPACE — LANCER';
@@ -2365,6 +2382,7 @@ function renderPres(game,players){
   if(presTimerIv){clearInterval(presTimerIv);presTimerIv=null;}
   const stage=$('pres-stage');
   spaceReady=false;
+  autoRevealPending=false;
   $('bottom-hint').textContent='';
 
   // COUNTDOWN
@@ -2448,7 +2466,7 @@ function renderPres(game,players){
           </div>`).join('')}
         </div>`;
       stage.innerHTML=inner;
-      setTimeout(()=>stats.forEach((s,i)=>{const b=$(`sb${i}`);if(b)b.style.width=(s/total*100)+'%';}),100);
+      setTimeout(()=>stats.forEach((s,i)=>{const b=$(`sb${i}`);if(b){const pct=s/total*100;b.style.width=pct+'%';const col=b.closest('.stat-col');if(col){if(pct<=0||pct>=99.9)col.style.opacity='0';else col.style.opacity='1';}}}),100);
     } else if(q.type==='tf'){
       inner=`<div id="pres-question">${q.question}</div>
         <div class="ans-grid" style="max-width:460px;">
@@ -2478,7 +2496,7 @@ function renderPres(game,players){
 
   // LEADERBOARD
   if(game.status==='leaderboard'){
-    const list=Object.values(players).sort((a,b)=>(b.score||0)-(a.score||0)).slice(0,8);
+    const list=Object.values(players).sort((a,b)=>(b.score||0)-(a.score||0)).slice(0,3);
     const isLast=game.currentQuestion>=QUESTIONS.length-1;
     stage.innerHTML=`
       <div class="lb-wrap">
@@ -2559,12 +2577,12 @@ async function advanceQuestion(){
     // Lance la première question
     const nextQ=0;
     await fbPatch('game',{status:'countdown',currentQuestion:nextQ,
-      countdownEnd:Date.now()+4000,questionStartTime:0,answerStats:[0,0,0,0]});
+      countdownEnd:Date.now()+3000,questionStartTime:0,answerStats:[0,0,0,0]});
     setTimeout(async()=>{
       const g=await fbGet('game');
       if(g&&g.status==='countdown')
         await fbPatch('game',{status:'question',questionStartTime:Date.now()});
-    },4000);
+    },3000);
     return;
   }
 
@@ -2572,12 +2590,12 @@ async function advanceQuestion(){
     const nextQ=(game.currentQuestion||0)+1;
     if(nextQ>=QUESTIONS.length){await fbPatch('game',{status:'end'});return;}
     await fbPatch('game',{status:'countdown',currentQuestion:nextQ,
-      countdownEnd:Date.now()+4000,questionStartTime:0,answerStats:[0,0,0,0]});
+      countdownEnd:Date.now()+3000,questionStartTime:0,answerStats:[0,0,0,0]});
     setTimeout(async()=>{
       const g=await fbGet('game');
       if(g&&g.status==='countdown')
         await fbPatch('game',{status:'question',questionStartTime:Date.now()});
-    },4000);
+    },3000);
   }
 }
 
@@ -2599,7 +2617,7 @@ function updateWCLive(players,qIdx){
 // ══════════════════════════════════════════
 //  PLAYER
 // ══════════════════════════════════════════
-let pid=null,pname='',pscore=0,pstreak=0,pAnswered=-1,pPollIv=null,pTimerIv=null,pGame=null;
+let pid=null,pname='',pscore=0,pstreak=0,pAnswered=-1,pPollIv=null,pTimerIv=null,pGame=null,sliderTouched=false;
 
 async function playerLogin(){
   const pinV=$('l-pin').value.trim();
@@ -2610,7 +2628,14 @@ async function playerLogin(){
   if(!game){$('l-err').textContent='Connexion échouée';return;}
   if(String(game.pin)!==String(pinV)){$('l-err').textContent='PIN INCORRECT';return;}
   if(!['lobby','countdown','question'].includes(game.status)){$('l-err').textContent='Accès non disponible';return;}
-  const id=await fbPush('players',{name:nameV,score:0,answeredCount:0,streak:0});
+  // Dédupliquer par nom : si le nom existe déjà, réutiliser ce joueur
+  const existingPlayers=await fbGet('players');
+  let id=null;
+  if(existingPlayers){
+    const existing=Object.entries(existingPlayers).find(([k,v])=>v.name&&v.name.toLowerCase()===nameV.toLowerCase());
+    if(existing){id=existing[0];}
+  }
+  if(!id){id=await fbPush('players',{name:nameV,score:0,answeredCount:0,streak:0});}
   if(!id){$('l-err').textContent='Erreur réseau';return;}
   pid=id;pname=nameV;
   show('player-panel');
@@ -2631,16 +2656,20 @@ async function pollPlayer(){
 
 function renderPlayer(game){
   const main=$('player-main');
+  // Ne pas re-render si un input texte est en focus (évite fermeture clavier mobile)
+  const activeEl=document.activeElement;
+  if(activeEl&&(activeEl.tagName==='INPUT'||activeEl.tagName==='TEXTAREA')&&game.status==='question'){return;}
   if(game.status==='lobby'){
     main.innerHTML=`<div class="wait"><div class="wdot"></div><h2>CONNECTÉ</h2><p>En attente du lancement...</p></div>`;return;}
   if(game.status==='countdown'){
     const rem=Math.max(0,Math.ceil((game.countdownEnd-Date.now())/1000));
-    main.innerHTML=`<div class="wait"><div style="font-family:'Share Tech Mono';font-size:4rem;color:var(--gold);">${rem}</div><p>Prochaine question</p></div>`;
-    const ci=setInterval(()=>{const r=Math.max(0,Math.ceil((game.countdownEnd-Date.now())/1000));const e=main.querySelector('div[style]');if(e)e.textContent=r;if(r<=0)clearInterval(ci);},200);return;}
+    main.innerHTML=`<div class="wait"><div id="p-cd" style="font-family:'Share Tech Mono';font-size:4rem;color:var(--gold);">${rem}</div><p>Prochaine question</p></div>`;
+    const ci=setInterval(()=>{const r=Math.max(0,Math.ceil((game.countdownEnd-Date.now())/1000));const e=$('p-cd');if(e)e.textContent=r;if(r<=0)clearInterval(ci);},200);return;}
   if(game.status==='question'&&game.currentQuestion>=0){
     if(pAnswered>=game.currentQuestion){
       main.innerHTML=`<div class="wait"><div style="font-size:2.5rem;">✓</div><h2>RÉPONSE ENVOYÉE</h2><p>En attente...</p></div>`;
       startPTimer(game);return;}
+    if(sliderTouched&&game.status==='question'){return;}
     renderPQ(QUESTIONS[game.currentQuestion],game);return;}
   if(game.status==='answer_reveal'){
     main.innerHTML=`<div class="wait"><div style="font-size:2rem;">👁</div><h2>RÉVÉLATION</h2><p>Regardez le projecteur</p></div>`;
@@ -2666,7 +2695,7 @@ function renderPQ(q,game){
     main.innerHTML=`<div id="p-q-text">${q.question}</div><div id="p-timer">⏱ ${q.timeLimit}</div>
       <div id="sl-container">
         <div id="sl-val">${mid}</div>
-        <input type="range" id="sl-input" min="${q.min}" max="${q.max}" value="${mid}" oninput="$('sl-val').textContent=this.value">
+        <input type="range" id="sl-input" min="${q.min}" max="${q.max}" value="${mid}" oninput="sliderTouched=true;$('sl-val').textContent=this.value">
         <div class="sl-bounds"><span>${q.min}</span><span>${q.max}</span></div>
         <button class="sl-submit" onclick="submitSlider()">CONFIRMER</button>
       </div>`;
@@ -2677,9 +2706,9 @@ function renderPQ(q,game){
     $('txt-in').onkeydown=e=>{if(e.key==='Enter')submitText();};
   } else if(q.type==='wordcloud'){
     main.innerHTML=`<div id="p-q-text">${q.question}</div><div id="p-timer">⏱ ${q.timeLimit}</div>
-      <div class="txt-wrap"><input class="txt-input" id="txt-in" type="text" placeholder="Un mot..." maxlength="30" autocomplete="off">
+      <div class="txt-wrap"><input class="txt-input" id="txt-in" type="text" placeholder="Un mot..." maxlength="30" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
       <button class="txt-submit" onclick="submitWC()">ENVOYER</button></div>`;
-    $('txt-in').onkeydown=e=>{if(e.key==='Enter')submitWC();};
+    setTimeout(()=>{const i=$('txt-in');if(i){i.onkeydown=e=>{if(e.key==='Enter')submitWC();};}},50);
   }
   startPTimer(game);
 }
@@ -2734,7 +2763,7 @@ async function submitSlider(){
   if(!pGame||pAnswered>=pGame.currentQuestion)return;
   const q=QUESTIONS[pGame.currentQuestion];
   const v=parseInt($('sl-input').value,10);
-  const correct=Math.abs(v-q.answer)<=q.answer*.1;
+  const correct=Math.abs(v-q.answer)<=Math.max(1,Math.round(q.answer*.03));
   $('sl-input').disabled=true;document.querySelector('.sl-submit').disabled=true;
   const disp=$('sl-val');if(disp)disp.innerHTML=`${v} <span style="font-size:.8rem;color:${correct?'var(--green)':'var(--red)'}">${correct?'✓':'✗ → '+q.answer}</span>`;
   await processAnswer(correct,v,q);
