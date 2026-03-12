@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>QuizLive</title>
+
+<!-- Firebase FIRST — critique, avant tout autre script -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+
+<style>
+:root {
+  --ink:#0a0a0f; --ink2:#13131a;
+  --glass:rgba(255,255,255,0.06); --glass-hi:rgba(255,255,255,0.10);
+  --brdr:rgba(255,255,255,0.09);
+  --white:#fff; --off:rgba(255,255,255,0.82); --muted:rgba(255,255,255,0.38);
+  --blue:#0a84ff;  --blue-g:rgba(10,132,255,0.32);
+  --green:#30d158; --red:#ff453a; --orange:#ff9f0a; --purple:#bf5af2;
+  --A:#ff453a; --B:#0a84ff; --C:#ff9f0a; --D:#30d158;
+  --r:20px; --rl:28px; --rxl:36px;
+  --sh:0 8px 32px rgba(0,0,0,.55),0 2px 8px rgba(0,0,0,.3);
+  --sh-lg:0 24px 64px rgba(0,0,0,.65),0 4px 16px rgba(0,0,0,.35);
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;font-family:'Sora',system-ui,sans-serif;background:var(--ink);color:var(--white);overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:radial-gradient(ellipse 80% 60% at 15% 0%,rgba(10,132,255,.10) 0%,transparent 60%),
+             radial-gradient(ellipse 50% 50% at 85% 85%,rgba(191,90,242,.07) 0%,transparent 55%),
+             radial-gradient(ellipse 40% 35% at 60% 40%,rgba(48,209,88,.04) 0%,transparent 50%)}
+
+/* SCREENS */
+.screen{display:none;position:relative;z-index:1;min-height:100vh;min-height:100dvh;align-items:center;justify-content:center;flex-direction:column;padding:24px 20px;padding-bottom:max(24px,env(safe-area-inset-bottom))}
+.screen.active{display:flex;animation:sIn .4s cubic-bezier(.22,1,.36,1) both}
+@keyframes sIn{from{opacity:0;transform:translateY(22px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+
+/* CARD */
+.card{width:100%;max-width:480px;background:var(--glass);border:1px solid var(--brdr);border-radius:var(--rxl);padding:36px 32px;backdrop-filter:blur(40px) saturate(180%);-webkit-backdrop-filter:blur(40px) saturate(180%);box-shadow:var(--sh-lg),inset 0 1px 0 rgba(255,255,255,.11),inset 0 -1px 0 rgba(0,0,0,.18);position:relative;overflow:hidden}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.18),transparent)}
+
+/* WORDMARK */
+.wm{display:flex;align-items:center;gap:9px;font-size:1.75rem;font-weight:900;letter-spacing:-1px;margin-bottom:4px}
+.wm-text{background:linear-gradient(135deg,#fff 30%,rgba(255,255,255,.48));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.wm-dot{width:10px;height:10px;background:var(--blue);border-radius:50%;box-shadow:0 0 14px var(--blue);flex-shrink:0}
+.sub{font-size:.82rem;color:var(--muted);font-weight:500;margin-bottom:32px;letter-spacing:.2px}
+
+/* INPUTS */
+.fl{margin-bottom:16px}
+.fl-lbl{display:block;font-size:.7rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px}
+.fl-inp{width:100%;padding:16px 18px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);border-radius:var(--r);color:var(--white);font-family:'Sora',sans-serif;font-size:1rem;font-weight:600;outline:none;transition:border-color .2s,background .2s,box-shadow .2s;box-shadow:inset 0 2px 4px rgba(0,0,0,.2);-webkit-appearance:none}
+.fl-inp::placeholder{color:rgba(255,255,255,.22)}
+.fl-inp:focus{border-color:var(--blue);background:rgba(10,132,255,.08);box-shadow:0 0 0 3px rgba(10,132,255,.15),inset 0 2px 4px rgba(0,0,0,.2)}
+
+/* BUTTONS */
+.btn{width:100%;padding:17px 24px;border:none;border-radius:var(--r);font-family:'Sora',sans-serif;font-size:.98rem;font-weight:700;cursor:pointer;transition:transform .15s,box-shadow .15s,opacity .2s;position:relative;overflow:hidden;letter-spacing:-.1px;margin-top:10px}
+.btn::after{content:'';position:absolute;top:0;left:0;right:0;height:48%;background:linear-gradient(180deg,rgba(255,255,255,.11),transparent);pointer-events:none}
+.btn:hover:not(:disabled){transform:translateY(-2px)}
+.btn:active:not(:disabled){transform:scale(.975)}
+.btn:disabled{opacity:.28;cursor:not-allowed}
+.btn-p{background:linear-gradient(160deg,#2693ff,var(--blue) 55%,#005ec4);color:#fff;box-shadow:0 4px 22px rgba(10,132,255,.38),0 1px 4px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.18)}
+.btn-p:hover:not(:disabled){box-shadow:0 8px 32px rgba(10,132,255,.48),inset 0 1px 0 rgba(255,255,255,.18)}
+.btn-g{background:var(--glass);border:1px solid var(--brdr);color:var(--off);box-shadow:var(--sh),inset 0 1px 0 rgba(255,255,255,.07)}
+
+/* LOBBY */
+#lobby .card{text-align:center}
+.av{width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,var(--blue),var(--purple));display:flex;align-items:center;justify-content:center;font-size:1.9rem;margin:0 auto 16px;box-shadow:0 0 30px rgba(10,132,255,.28),var(--sh)}
+.cnt{font-size:4rem;font-weight:900;letter-spacing:-3px;background:linear-gradient(135deg,var(--white),var(--muted));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1;margin:12px 0 4px}
+.wp{display:inline-flex;align-items:center;gap:8px;background:rgba(48,209,88,.10);border:1px solid rgba(48,209,88,.22);border-radius:50px;padding:7px 16px;font-size:.78rem;font-weight:700;color:var(--green);margin-top:18px}
+.pdot{width:7px;height:7px;background:var(--green);border-radius:50%;animation:pulse 1.5s ease infinite}
+@keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.6);opacity:.5}}
+
+/* QUESTION */
+#question{justify-content:flex-start;padding-top:20px;gap:16px}
+.qtop{width:100%;max-width:680px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.qnum{background:var(--glass);border:1px solid var(--brdr);border-radius:50px;padding:8px 18px;font-size:.74rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;backdrop-filter:blur(20px)}
+.tw{position:relative;width:68px;height:68px;flex-shrink:0;filter:drop-shadow(0 0 10px rgba(10,132,255,.35))}
+.tsvg{transform:rotate(-90deg);display:block}
+.ttrack{fill:none;stroke:rgba(255,255,255,.07);stroke-width:5}
+.tring{fill:none;stroke:var(--blue);stroke-width:5;stroke-linecap:round;stroke-dasharray:175.9;stroke-dashoffset:0;transition:stroke-dashoffset .9s linear,stroke .5s}
+.tval{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:1.3rem;font-weight:900;letter-spacing:-1px}
+.qbox{width:100%;max-width:680px;background:var(--glass);border:1px solid var(--brdr);border-radius:var(--rl);padding:28px 28px 24px;backdrop-filter:blur(40px);-webkit-backdrop-filter:blur(40px);box-shadow:var(--sh-lg),inset 0 1px 0 rgba(255,255,255,.09);text-align:center}
+.qtxt{font-size:1.28rem;font-weight:700;line-height:1.45}
+.agrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;width:100%;max-width:680px}
+.abtn{padding:0;border:none;border-radius:var(--r);cursor:pointer;transition:transform .18s cubic-bezier(.22,1,.36,1),box-shadow .18s,opacity .2s;position:relative;overflow:hidden;min-height:80px;text-align:left;font-family:'Sora',sans-serif}
+.abtn:hover:not(:disabled){transform:translateY(-3px) scale(1.01)}
+.abtn:active:not(:disabled){transform:scale(.97)}
+.abtn:disabled{cursor:not-allowed}
+.ain{display:flex;align-items:center;gap:12px;padding:18px 20px;height:100%;position:relative;z-index:1}
+.altr{width:34px;height:34px;border-radius:10px;background:rgba(0,0,0,.2);display:flex;align-items:center;justify-content:center;font-size:.82rem;font-weight:800;color:rgba(255,255,255,.88);flex-shrink:0;box-shadow:inset 0 1px 0 rgba(255,255,255,.14),0 2px 4px rgba(0,0,0,.2)}
+.atxt{font-size:.93rem;font-weight:700;color:#fff;line-height:1.3;flex:1}
+.abtn.A{background:linear-gradient(145deg,#ff6a61,var(--A) 50%,#c02318);box-shadow:0 6px 20px rgba(255,69,58,.32),0 2px 8px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.18)}
+.abtn.B{background:linear-gradient(145deg,#3b9eff,var(--B) 50%,#0053af);box-shadow:0 6px 20px rgba(10,132,255,.32),0 2px 8px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.18)}
+.abtn.C{background:linear-gradient(145deg,#ffb830,var(--C) 50%,#c97800);box-shadow:0 6px 20px rgba(255,159,10,.32),0 2px 8px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.18)}
+.abtn.D{background:linear-gradient(145deg,#4de879,var(--D) 50%,#1c9c40);box-shadow:0 6px 20px rgba(48,209,88,.32),0 2px 8px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.18)}
+.abtn.cor{transform:scale(1.03)!important;box-shadow:0 0 0 3px #fff,0 12px 40px rgba(48,209,88,.45),inset 0 1px 0 rgba(255,255,255,.18)!important;opacity:1!important}
+.abtn.wrg{opacity:.25!important;transform:scale(.96)!important}
+.sbadge{display:none;align-items:center;gap:10px;background:rgba(48,209,88,.10);border:1px solid rgba(48,209,88,.28);border-radius:50px;padding:12px 26px;font-size:.93rem;font-weight:700;color:var(--green);animation:pop .3s cubic-bezier(.22,1,.36,1)}
+.sbadge.show{display:flex}
+@keyframes pop{from{transform:scale(.8);opacity:0}to{transform:scale(1);opacity:1}}
+
+/* RESULT */
+#result .card{text-align:center}
+.rico{font-size:4rem;display:block;margin-bottom:8px;animation:pop .4s cubic-bezier(.22,1,.36,1)}
+.rverd{font-size:1.55rem;font-weight:900;letter-spacing:-.5px;margin-bottom:20px}
+.capill{background:rgba(48,209,88,.08);border:1px solid rgba(48,209,88,.22);border-radius:var(--r);padding:14px 16px;margin-bottom:24px;text-align:left}
+.capill-lbl{font-size:.68rem;text-transform:uppercase;letter-spacing:.6px;color:rgba(48,209,88,.55);font-weight:700;margin-bottom:5px}
+.capill-val{font-size:.95rem;font-weight:700;color:var(--green)}
+.srow{display:flex;gap:12px;margin-bottom:8px}
+.sbox{flex:1;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:var(--r);padding:18px 14px;text-align:center;box-shadow:inset 0 2px 4px rgba(0,0,0,.18)}
+.sval{font-size:2.1rem;font-weight:900;letter-spacing:-1px}
+.sval.e{color:var(--blue)}
+.slbl{font-size:.68rem;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700;margin-top:5px}
+
+/* LEADERBOARD */
+#leaderboard .card{max-width:500px}
+.lbtitle{text-align:center;font-size:1.5rem;font-weight:900;letter-spacing:-.5px;margin-bottom:24px}
+.lbrow{display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:var(--r);margin-bottom:8px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05);animation:sli .35s cubic-bezier(.22,1,.36,1) both}
+.lbrow:nth-child(1){animation-delay:.04s}.lbrow:nth-child(2){animation-delay:.09s}.lbrow:nth-child(3){animation-delay:.14s}.lbrow:nth-child(4){animation-delay:.19s}.lbrow:nth-child(5){animation-delay:.24s}
+@keyframes sli{from{opacity:0;transform:translateX(-18px)}to{opacity:1;transform:translateX(0)}}
+.lbrow.me{background:rgba(10,132,255,.09);border-color:rgba(10,132,255,.22)}
+.lbrank{font-size:1.25rem;font-weight:900;width:34px;text-align:center;flex-shrink:0}
+.lbav{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,var(--blue),var(--purple));display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;box-shadow:var(--sh)}
+.lbname{flex:1;font-weight:700;font-size:.92rem}
+.lbscore{font-weight:900;color:var(--blue);font-size:1rem}
+
+/* END */
+#end .card{text-align:center;max-width:480px}
+.podwrap{display:flex;align-items:flex-end;justify-content:center;gap:8px;margin:24px 0 16px}
+.podcol{display:flex;flex-direction:column;align-items:center;gap:6px}
+.podav{width:50px;height:50px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.3rem;box-shadow:var(--sh)}
+.podcol:nth-child(1) .podav{background:linear-gradient(135deg,#c0a020,#f0d060)}
+.podcol:nth-child(2) .podav{background:linear-gradient(135deg,#aaa,#eee)}
+.podcol:nth-child(3) .podav{background:linear-gradient(135deg,#9d5929,#cd8d5a)}
+.podblk{width:88px;border-radius:12px 12px 0 0;display:flex;align-items:center;justify-content:center;font-size:1.4rem}
+.podcol:nth-child(1) .podblk{height:132px;background:linear-gradient(180deg,#d4aa00,#8a6a00)}
+.podcol:nth-child(2) .podblk{height:100px;background:linear-gradient(180deg,#c8c8c8,#707070)}
+.podcol:nth-child(3) .podblk{height:74px;background:linear-gradient(180deg,#cd7f32,#7a4a1a)}
+.podnm{font-size:.72rem;font-weight:700;max-width:88px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center}
+.podpts{font-size:.68rem;color:var(--muted);font-weight:600}
+
+/* TOAST */
+.toast{position:fixed;bottom:32px;left:50%;transform:translateX(-50%) translateY(18px);background:rgba(22,22,30,.96);border:1px solid var(--brdr);border-radius:50px;padding:12px 26px;font-size:.88rem;font-weight:700;color:var(--white);backdrop-filter:blur(20px);box-shadow:var(--sh-lg);opacity:0;transition:opacity .25s,transform .25s;z-index:999;pointer-events:none;white-space:nowrap}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.confetti-c{position:fixed;inset:0;pointer-events:none;z-index:100}
+
+/* ===================== ADMIN ===================== */
+#admin-screen{display:none;min-height:100vh;min-height:100dvh;flex-direction:column;background:var(--ink);position:relative;z-index:1}
+#admin-screen.active{display:flex}
+.atop{display:flex;align-items:center;justify-content:space-between;padding:15px 24px;background:rgba(255,255,255,.03);border-bottom:1px solid var(--brdr);backdrop-filter:blur(20px);gap:12px;flex-wrap:wrap}
+.pinchip{background:linear-gradient(135deg,rgba(10,132,255,.18),rgba(10,132,255,.08));border:1px solid rgba(10,132,255,.28);border-radius:50px;padding:10px 22px;font-size:1.25rem;font-weight:900;letter-spacing:3px;color:var(--blue);cursor:pointer;transition:transform .15s,box-shadow .15s;box-shadow:0 0 20px rgba(10,132,255,.12)}
+.pinchip:hover{transform:scale(1.03);box-shadow:0 0 30px rgba(10,132,255,.22)}
+.spill{padding:7px 14px;border-radius:50px;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+.sp-lobby{background:rgba(255,159,10,.10);color:var(--orange);border:1px solid rgba(255,159,10,.22)}
+.sp-question{background:rgba(10,132,255,.10);color:var(--blue);border:1px solid rgba(10,132,255,.22)}
+.sp-reveal{background:rgba(191,90,242,.10);color:var(--purple);border:1px solid rgba(191,90,242,.22)}
+.sp-lb{background:rgba(48,209,88,.10);color:var(--green);border:1px solid rgba(48,209,88,.22)}
+.sp-end{background:rgba(255,255,255,.04);color:var(--muted);border:1px solid rgba(255,255,255,.08)}
+.alayout{display:grid;grid-template-columns:1fr 310px;flex:1;overflow:hidden;min-height:0}
+@media(max-width:768px){.alayout{grid-template-columns:1fr}}
+.amain{padding:24px;overflow-y:auto;display:flex;flex-direction:column;gap:20px}
+.aside{padding:20px;overflow-y:auto;border-left:1px solid var(--brdr);display:flex;flex-direction:column;gap:20px}
+.slbl{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:10px}
+.aqcard{background:var(--glass);border:1px solid var(--brdr);border-radius:var(--rl);padding:28px;backdrop-filter:blur(30px);box-shadow:var(--sh),inset 0 1px 0 rgba(255,255,255,.07)}
+.aqtxt{font-size:1.25rem;font-weight:800;margin-bottom:22px;line-height:1.4}
+.aagrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.aachip{padding:12px 16px;border-radius:12px;font-size:.82rem;font-weight:700;display:flex;align-items:center;gap:8px}
+.aachip.cor-chip{box-shadow:0 0 0 2px rgba(255,255,255,.5)}
+.cgrid{display:grid;gap:8px}
+.cbtn{padding:14px 18px;border:none;border-radius:var(--r);font-family:'Sora',sans-serif;font-size:.88rem;font-weight:700;cursor:pointer;transition:transform .15s,box-shadow .15s,opacity .2s;display:flex;align-items:center;gap:10px;position:relative;overflow:hidden}
+.cbtn::after{content:'';position:absolute;top:0;left:0;right:0;height:44%;background:linear-gradient(180deg,rgba(255,255,255,.14),transparent);pointer-events:none}
+.cbtn:hover:not(:disabled){transform:translateY(-2px)}
+.cbtn:active:not(:disabled){transform:scale(.97)}
+.cbtn:disabled{opacity:.28;cursor:not-allowed}
+.c-lau{background:linear-gradient(160deg,#4de87a,var(--green),#1a9b3a);color:#fff;box-shadow:0 4px 20px rgba(48,209,88,.32),inset 0 1px 0 rgba(255,255,255,.18)}
+.c-rev{background:linear-gradient(160deg,#d483ff,var(--purple),#8c35c0);color:#fff;box-shadow:0 4px 20px rgba(191,90,242,.32),inset 0 1px 0 rgba(255,255,255,.18)}
+.c-nxt{background:linear-gradient(160deg,#3b9eff,var(--blue),#0055b3);color:#fff;box-shadow:0 4px 20px rgba(10,132,255,.32),inset 0 1px 0 rgba(255,255,255,.18)}
+.c-lb{background:linear-gradient(160deg,#ffb830,var(--orange),#cc7a00);color:#fff;box-shadow:0 4px 20px rgba(255,159,10,.32),inset 0 1px 0 rgba(255,255,255,.18)}
+.c-end{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:var(--muted)}
+.atbig{text-align:center;font-size:3.5rem;font-weight:900;letter-spacing:-3px;background:linear-gradient(135deg,var(--white),rgba(255,255,255,.38));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1}
+.ptrack{background:rgba(255,255,255,.05);border-radius:50px;height:8px;overflow:hidden;margin:8px 0 6px}
+.pfill{height:100%;background:linear-gradient(90deg,var(--blue),var(--green));border-radius:50px;transition:width .4s ease;box-shadow:0 0 8px rgba(48,209,88,.35)}
+.ptxt{font-size:.78rem;font-weight:700;color:var(--muted)}
+.prow{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05);margin-bottom:6px;animation:sli .3s ease both}
+.pname{flex:1;font-size:.86rem;font-weight:700}
+.pscore{font-weight:900;color:var(--blue);font-size:.82rem}
+.adot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.adot.y{background:var(--green);box-shadow:0 0 6px rgba(48,209,88,.45)}
+.adot.n{background:rgba(255,255,255,.13)}
+.bitem{margin-bottom:12px}
+.bhdr{display:flex;justify-content:space-between;font-size:.75rem;font-weight:700;margin-bottom:5px}
+.btrack{background:rgba(255,255,255,.05);border-radius:50px;height:22px;overflow:hidden}
+.bfill{height:100%;border-radius:50px;transition:width .7s cubic-bezier(.22,1,.36,1);display:flex;align-items:center;padding-left:10px;font-size:.75rem;font-weight:700;color:rgba(255,255,255,.88);min-width:0}
+.sharebox{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:12px 14px;font-size:.72rem;color:var(--muted);word-break:break-all;cursor:pointer;transition:background .2s,border-color .2s}
+.sharebox:hover{background:rgba(10,132,255,.07);border-color:rgba(10,132,255,.18)}
+
+@media(max-width:480px){.qtxt{font-size:1.08rem}.agrid{grid-template-columns:1fr}.abtn{min-height:64px}.card{padding:28px 20px}}
+</style>
+</head>
+<body>
+
+<div class="toast" id="toast"></div>
+<canvas class="confetti-c" id="cc"></canvas>
+
+<!-- ===== PLAYER ===== -->
+<div class="screen active" id="join">
+  <div class="card">
+    <div class="wm"><div class="wm-dot"></div><span class="wm-text">QuizLive</span></div>
+    <div class="sub">Rejoins la partie en quelques secondes</div>
+    <div class="fl"><label class="fl-lbl">Ton pseudo</label><input class="fl-inp" id="inp-name" type="text" placeholder="SuperChampion" maxlength="20" autocomplete="off"></div>
+    <div class="fl"><label class="fl-lbl">PIN de la partie</label><input class="fl-inp" id="inp-pin" type="text" inputmode="numeric" placeholder="123456" maxlength="6"></div>
+    <button class="btn btn-p" id="btn-join">Rejoindre →</button>
+    <button class="btn btn-g" id="btn-adm" style="margin-top:8px;font-size:.82rem;padding:13px">⚙️ Mode Admin</button>
+  </div>
+</div>
+
+<div class="screen" id="lobby">
+  <div class="card">
+    <div class="wm" style="justify-content:center;margin-bottom:20px"><div class="wm-dot"></div><span class="wm-text">QuizLive</span></div>
+    <div class="av" id="lav">🎮</div>
+    <div style="font-size:1.1rem;font-weight:800;text-align:center" id="lname">—</div>
+    <div class="cnt" id="lcnt">1</div>
+    <div style="color:var(--muted);font-size:.82rem;text-align:center">joueur(s) connecté(s)</div>
+    <div style="text-align:center;margin-top:20px"><div class="wp"><div class="pdot"></div>En attente du lancement…</div></div>
+  </div>
+</div>
+
+<div class="screen" id="question">
+  <div class="qtop">
+    <div class="qnum" id="qnum">Question 1 / 7</div>
+    <div class="tw">
+      <svg class="tsvg" width="68" height="68" viewBox="0 0 68 68">
+        <circle class="ttrack" cx="34" cy="34" r="28"/>
+        <circle class="tring" id="tring" cx="34" cy="34" r="28"/>
+      </svg>
+      <div class="tval" id="tval">20</div>
+    </div>
+  </div>
+  <div class="qbox"><div class="qtxt" id="qtxt">—</div></div>
+  <div class="agrid" id="agrid"></div>
+  <div class="sbadge" id="sbadge"><span>✅</span><span>Réponse envoyée !</span></div>
+</div>
+
+<div class="screen" id="result">
+  <div class="card">
+    <span class="rico" id="rico">✅</span>
+    <div class="rverd" id="rverd">Bonne réponse !</div>
+    <div class="capill"><div class="capill-lbl">Bonne réponse</div><div class="capill-val" id="cans">—</div></div>
+    <div class="srow">
+      <div class="sbox"><div class="sval e" id="pte">+0</div><div class="slbl">Points gagnés</div></div>
+      <div class="sbox"><div class="sval" id="ptt">0</div><div class="slbl">Score total</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="screen" id="leaderboard">
+  <div class="card">
+    <div class="lbtitle">🏆 Classement</div>
+    <div id="lblist"></div>
+    <div id="lbme" style="text-align:center;color:var(--muted);font-size:.82rem;margin-top:12px"></div>
+  </div>
+</div>
+
+<div class="screen" id="end">
+  <div class="card">
+    <div class="wm" style="justify-content:center;margin-bottom:4px"><div class="wm-dot"></div><span class="wm-text">QuizLive</span></div>
+    <div style="text-align:center;margin:12px 0 0;font-size:1.5rem;font-weight:900">🎉 Fin de partie !</div>
+    <div class="podwrap" id="podwrap"></div>
+    <div id="endrank" style="color:var(--muted);font-size:.82rem;text-align:center"></div>
+    <button class="btn btn-g" onclick="location.reload()" style="margin-top:20px">↩ Rejouer</button>
+  </div>
+</div>
+
+<!-- ===== ADMIN ===== -->
+<div id="admin-screen">
+  <div class="atop">
+    <div><div class="wm" style="margin-bottom:0;font-size:1.15rem"><div class="wm-dot" style="width:8px;height:8px"></div><span class="wm-text">QuizLive Admin</span></div></div>
+    <div>
+      <div class="pinchip" id="apin" onclick="cpyLink()">PIN: ——————</div>
+      <div style="font-size:.62rem;color:var(--muted);text-align:center;margin-top:3px">Cliquer pour copier le lien joueurs</div>
+    </div>
+    <span class="spill sp-lobby" id="astatus">Lobby</span>
+  </div>
+  <div class="alayout">
+    <div class="amain">
+      <div><div class="slbl">Question en cours</div><div class="aqcard" id="aqcard"><div style="color:var(--muted);text-align:center;padding:24px">En attente du lancement…</div></div></div>
+      <div><div class="slbl">Lien joueurs</div><div class="sharebox" id="ashare" onclick="cpyLink()">—</div><div style="font-size:.68rem;color:var(--muted);margin-top:4px">Cliquer pour copier</div></div>
+    </div>
+    <div class="aside">
+      <div><div class="slbl">Contrôles</div>
+        <div class="cgrid">
+          <button class="cbtn c-lau" id="c-lau" onclick="aLaunch()" disabled>🚀 Lancer le quiz</button>
+          <button class="cbtn c-rev" id="c-rev" onclick="aReveal()" disabled>👁 Révéler la réponse</button>
+          <button class="cbtn c-nxt" id="c-nxt" onclick="aNext()"   disabled>⏭ Question suivante</button>
+          <button class="cbtn c-lb"  id="c-lb"  onclick="aLb()"     disabled>🏆 Afficher classement</button>
+          <button class="cbtn c-end" id="c-end" onclick="aEnd()"    disabled>🏁 Terminer</button>
+        </div>
+      </div>
+      <div><div class="slbl">Timer</div><div class="atbig" id="atimer">—</div></div>
+      <div><div class="slbl">Réponses</div><div class="ptrack"><div class="pfill" id="aprog" style="width:0%"></div></div><div class="ptxt" id="aptext">0 / 0</div></div>
+      <div><div class="slbl">Joueurs</div><div id="aplayers"></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ========== FIREBASE ==========
+firebase.initializeApp({
+  apiKey:"AIzaSyDZifIMmrakV8IiVjjkgRslqxXxfXKhy7U",
+  authDomain:"masterclass-digital-terrorism.firebaseapp.com",
+  databaseURL:"https://masterclass-digital-terrorism-default-rtdb.firebaseio.com",
+  projectId:"masterclass-digital-terrorism",
+  storageBucket:"masterclass-digital-terrorism.firebasestorage.app",
+  messagingSenderId:"48204580752",
+  appId:"1:48204580752:web:9c32f42a0f5b492fad9515"
+});
+const db = firebase.database();
+
+// ========== 📝 QUIZ — Modifie ce tableau pour ajouter/changer les questions ==========
+const QUIZ = [
+  {question:"Quelle est la capitale de l'Australie ?",answers:["Sydney","Melbourne","Canberra","Brisbane"],correct:2,timeLimit:20},
+  {question:"Combien de planètes composent notre système solaire ?",answers:["7","8","9","10"],correct:1,timeLimit:15},
+  {question:"En quelle année a été créé ARPANET, ancêtre d'Internet ?",answers:["1969","1975","1983","1991"],correct:0,timeLimit:20},
+  {question:"Quel pays a remporté la Coupe du Monde 2018 ?",answers:["Brésil","Allemagne","Argentine","France"],correct:3,timeLimit:15},
+  {question:"Quelle est la formule chimique de l'eau ?",answers:["CO₂","H₂O","NaCl","O₂"],correct:1,timeLimit:15},
+  {question:"Qui a peint la Joconde ?",answers:["Michel-Ange","Raphaël","Léonard de Vinci","Donatello"],correct:2,timeLimit:20},
+  {question:"Quelle est la plus grande planète du système solaire ?",answers:["Saturne","Neptune","Jupiter","Uranus"],correct:2,timeLimit:15},
+];
+
+// ========== STATE ==========
+const isAdmin = new URLSearchParams(location.search).has('admin');
+const PID = sessionStorage.getItem('ql_pid') || ('p'+Date.now().toString(36));
+sessionStorage.setItem('ql_pid', PID);
+let myName = sessionStorage.getItem('ql_name') || '';
+let myScore = 0, hasAns = false;
+let tIval = null, atIval = null, currentPin = null;
+const LTR = ['A','B','C','D'];
+const ACOL = ['var(--A)','var(--B)','var(--C)','var(--D)'];
+const ABGL = ['rgba(255,69,58,.14)','rgba(10,132,255,.14)','rgba(255,159,10,.14)','rgba(48,209,88,.14)'];
+const EMOJ = ['🎮','🎯','🚀','⚡','🔥','🌟','🎲','🏆'];
+
+// ========== UTILS ==========
+function show(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById('admin-screen').classList.remove('active');
+  if(id==='admin') document.getElementById('admin-screen').classList.add('active');
+  else { const e=document.getElementById(id); if(e) e.classList.add('active'); }
+}
+let tt;
+function toast(m,d=2200){
+  const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show');
+  clearTimeout(tt); tt=setTimeout(()=>t.classList.remove('show'),d);
+}
+
+// ========== PLAYER ==========
+if(!isAdmin){
+  const pp=new URLSearchParams(location.search).get('pin');
+  if(pp) document.getElementById('inp-pin').value=pp;
+  if(myName) document.getElementById('inp-name').value=myName;
+  document.getElementById('btn-join').onclick=joinGame;
+  document.getElementById('btn-adm').onclick=()=>location.href='?admin';
+  ['inp-pin','inp-name'].forEach(id=>document.getElementById(id).addEventListener('keydown',e=>e.key==='Enter'&&joinGame()));
+  if(myName) db.ref('game/pin').once('value').then(s=>{if(s.val()) listenGame();});
+}
+
+async function joinGame(){
+  const name=document.getElementById('inp-name').value.trim();
+  const pin=document.getElementById('inp-pin').value.trim();
+  if(!name){toast('❌ Entre ton pseudo');return}
+  if(!pin){toast('❌ Entre le PIN');return}
+  const snap=await db.ref('game').once('value');
+  const g=snap.val();
+  if(!g){toast('❌ Aucune partie trouvée');return}
+  if(String(g.pin)!==String(pin)){toast('❌ PIN incorrect');return}
+  if(g.status==='end'){toast('❌ Partie terminée');return}
+  myName=name; sessionStorage.setItem('ql_name',myName);
+  await db.ref('players/'+PID).set({name,score:0,answeredCount:0});
+  listenGame();
+}
+
+function listenGame(){
+  db.ref('game').on('value',snap=>{const g=snap.val();if(g) handleState(g);});
+  db.ref('players/'+PID+'/score').on('value',s=>{if(s.val()!=null) myScore=s.val();});
+}
+
+function handleState(g){
+  if(g.status==='lobby')         showLobby(g);
+  else if(g.status==='question') showQuestion(g);
+  else if(g.status==='answer_reveal') showReveal(g);
+  else if(g.status==='leaderboard')   showLb(g);
+  else if(g.status==='end')           showEnd();
+}
+
+function showLobby(g){
+  show('lobby');
+  document.getElementById('lname').textContent=myName;
+  document.getElementById('lav').textContent=EMOJ[myName.charCodeAt(0)%EMOJ.length];
+  db.ref('players').once('value').then(s=>document.getElementById('lcnt').textContent=s.numChildren());
+}
+
+function showQuestion(g){
+  show('question'); hasAns=false;
+  const q=g.questions[g.currentQuestion];
+  document.getElementById('qnum').textContent=`Question ${g.currentQuestion+1} / ${g.questions.length}`;
+  document.getElementById('qtxt').textContent=q.question;
+  document.getElementById('sbadge').classList.remove('show');
+  const grid=document.getElementById('agrid'); grid.innerHTML='';
+  q.answers.forEach((ans,i)=>{
+    const btn=document.createElement('button');
+    btn.className=`abtn ${LTR[i]}`;
+    btn.innerHTML=`<div class="ain"><div class="altr">${LTR[i]}</div><div class="atxt">${ans}</div></div>`;
+    btn.onclick=()=>submitAnswer(i,g);
+    grid.appendChild(btn);
+  });
+  startTimer(g.questionStartTime,q.timeLimit);
+}
+
+function startTimer(ts,lim){
+  clearInterval(tIval);
+  const C=175.9;
+  function tick(){
+    const rem=Math.max(0,Math.ceil((ts+lim*1000-Date.now())/1000));
+    document.getElementById('tval').textContent=rem;
+    const pct=rem/lim;
+    document.getElementById('tring').style.strokeDashoffset=C*(1-pct);
+    document.getElementById('tring').style.stroke=rem<=5?'var(--red)':rem<=10?'var(--orange)':'var(--blue)';
+    if(rem<=0) clearInterval(tIval);
+  }
+  tick(); tIval=setInterval(tick,500);
+}
+
+async function submitAnswer(idx,g){
+  if(hasAns) return; hasAns=true; clearInterval(tIval);
+  const q=g.questions[g.currentQuestion];
+  const ok=idx===q.correct;
+  const rem=Math.max(0,q.timeLimit-(Date.now()-g.questionStartTime)/1000);
+  const pts=ok?Math.max(100,Math.round(1000*(rem/q.timeLimit))):0;
+  document.querySelectorAll('.abtn').forEach(b=>b.disabled=true);
+  document.getElementById('sbadge').classList.add('show');
+  document.getElementById('tval').textContent='✓';
+  await db.ref('players/'+PID).update({score:myScore+pts,answeredCount:g.currentQuestion+1,lastAnswer:{index:idx,correct:ok,pointsEarned:pts,question:g.currentQuestion}});
+}
+
+function showReveal(g){
+  clearInterval(tIval); show('result');
+  const q=g.questions[g.currentQuestion];
+  document.getElementById('cans').textContent=q.answers[q.correct];
+  db.ref('players/'+PID+'/lastAnswer').once('value').then(snap=>{
+    const la=snap.val();
+    const ok=la&&la.correct&&la.question===g.currentQuestion;
+    const pts=la&&la.question===g.currentQuestion?la.pointsEarned:0;
+    document.getElementById('rico').textContent=ok?'✅':'❌';
+    document.getElementById('rverd').textContent=ok?'Bonne réponse !':'Mauvaise réponse…';
+    document.getElementById('rverd').style.color=ok?'var(--green)':'var(--red)';
+    document.getElementById('pte').textContent='+'+pts;
+    db.ref('players/'+PID+'/score').once('value').then(s=>document.getElementById('ptt').textContent=s.val()||0);
+  });
+}
+
+async function showLb(g){
+  show('leaderboard');
+  const snap=await db.ref('players').once('value');
+  const arr=[]; snap.forEach(c=>arr.push({id:c.key,...c.val()}));
+  arr.sort((a,b)=>b.score-a.score);
+  const med=['🥇','🥈','🥉','4️⃣','5️⃣'];
+  const myR=arr.findIndex(p=>p.id===PID)+1;
+  document.getElementById('lblist').innerHTML=arr.slice(0,5).map((p,i)=>`
+    <div class="lbrow ${p.id===PID?'me':''}">
+      <div class="lbrank">${med[i]||i+1}</div>
+      <div class="lbav">${EMOJ[p.name.charCodeAt(0)%EMOJ.length]}</div>
+      <div class="lbname">${p.name}${p.id===PID?' <span style="color:var(--blue);font-size:.68rem">(toi)</span>':''}</div>
+      <div class="lbscore">${p.score}</div>
+    </div>`).join('');
+  document.getElementById('lbme').textContent=myR>5?`Ta position : #${myR} sur ${arr.length}`:'';
+}
+
+async function showEnd(){
+  clearInterval(tIval); show('end');
+  const snap=await db.ref('players').once('value');
+  const arr=[]; snap.forEach(c=>arr.push({id:c.key,...c.val()}));
+  arr.sort((a,b)=>b.score-a.score);
+  const myR=arr.findIndex(p=>p.id===PID)+1;
+  const order=[arr[1],arr[0],arr[2]].filter(Boolean);
+  const emo2=['🥈','🥇','🥉'];
+  document.getElementById('podwrap').innerHTML=order.map((p,i)=>`
+    <div class="podcol">
+      <div class="podnm">${p.name}</div><div class="podpts">${p.score} pts</div>
+      <div class="podblk">${emo2[i]}</div>
+    </div>`).join('');
+  document.getElementById('endrank').textContent=`Tu as terminé #${myR} sur ${arr.length} joueur(s)`;
+  launchConfetti();
+}
+
+// ========== ADMIN ==========
+let aplListener=null;
+if(isAdmin){show('admin');initAdmin();}
+
+async function initAdmin(){
+  currentPin=Math.floor(100000+Math.random()*900000);
+  document.getElementById('apin').textContent='PIN: '+currentPin;
+  const url=`${location.origin}${location.pathname}?pin=${currentPin}`;
+  document.getElementById('ashare').textContent=url;
+  await db.ref('game').set({status:'lobby',currentQuestion:0,pin:currentPin,questionStartTime:0,questions:QUIZ});
+  await db.ref('players').remove();
+  db.ref('players').on('value',snap=>{
+    const arr=[]; snap.forEach(c=>arr.push({id:c.key,...c.val()}));
+    renderPlayers(arr,null);
+    document.getElementById('c-lau').disabled=arr.length===0;
+  });
+  db.ref('game').on('value',snap=>{const g=snap.val();if(g) updateAdmin(g);});
+}
+
+function renderPlayers(arr,cq){
+  arr.sort((a,b)=>b.score-a.score);
+  document.getElementById('aplayers').innerHTML=arr.map(p=>{
+    const ans=cq!==null&&p.answeredCount>cq;
+    return`<div class="prow"><div class="adot ${ans?'y':'n'}"></div><div class="pname">${p.name}</div><div class="pscore">${p.score} pts</div></div>`;
+  }).join('')||'<div style="color:var(--muted);font-size:.78rem">Aucun joueur</div>';
+}
+
+const SCFG={
+  lobby:{cls:'sp-lobby',lbl:'🟡 Lobby'},
+  question:{cls:'sp-question',lbl:'🔵 Question'},
+  answer_reveal:{cls:'sp-reveal',lbl:'🟣 Révélation'},
+  leaderboard:{cls:'sp-lb',lbl:'🟢 Classement'},
+  end:{cls:'sp-end',lbl:'⚫ Terminé'}
+};
+
+function updateAdmin(g){
+  const cfg=SCFG[g.status]||SCFG.lobby;
+  const sp=document.getElementById('astatus');
+  sp.className='spill '+cfg.cls; sp.textContent=cfg.lbl;
+  document.getElementById('c-lau').disabled=g.status!=='lobby';
+  document.getElementById('c-rev').disabled=g.status!=='question';
+  document.getElementById('c-nxt').disabled=!(g.status==='answer_reveal'&&g.currentQuestion<g.questions.length-1);
+  document.getElementById('c-lb').disabled=g.status!=='answer_reveal';
+  document.getElementById('c-end').disabled=g.status==='end'||g.status==='lobby';
+  if(g.status==='lobby'){document.getElementById('atimer').textContent='—';document.getElementById('aqcard').innerHTML='<div style="color:var(--muted);text-align:center;padding:24px">En attente du lancement…</div>';return;}
+  const q=g.questions[g.currentQuestion]; if(!q) return;
+  document.getElementById('aqcard').innerHTML=`
+    <div class="slbl">Q${g.currentQuestion+1} / ${g.questions.length}</div>
+    <div class="aqtxt">${q.question}</div>
+    <div class="aagrid" id="aaag">${q.answers.map((a,i)=>`
+      <div class="aachip ${i===q.correct?'cor-chip':''}" style="background:${ABGL[i]};color:${ACOL[i]}">
+        <span style="font-size:.72rem;font-weight:900">${LTR[i]}</span><span>${a}</span>
+        ${i===q.correct?'<span style="margin-left:auto">✓</span>':''}
+      </div>`).join('')}
+    </div>
+    <div id="abchart"></div>`;
+  if(g.status==='question'){
+    clearInterval(atIval);
+    const end=g.questionStartTime+q.timeLimit*1000;
+    atIval=setInterval(()=>{
+      const rem=Math.max(0,Math.ceil((end-Date.now())/1000));
+      document.getElementById('atimer').textContent=rem+'s';
+      if(rem<=0) clearInterval(atIval);
+    },300);
+    if(aplListener) db.ref('players').off('value',aplListener);
+    aplListener=db.ref('players').on('value',snap=>{
+      const tot=snap.numChildren(); let ans=0; const arr=[];
+      snap.forEach(c=>{const v=c.val();arr.push({id:c.key,...v});if(v.answeredCount>g.currentQuestion) ans++;});
+      const pct=tot>0?ans/tot*100:0;
+      document.getElementById('aprog').style.width=pct+'%';
+      document.getElementById('aptext').textContent=`${ans} / ${tot}`;
+      renderPlayers(arr,g.currentQuestion);
+    });
+  } else {
+    clearInterval(atIval); document.getElementById('atimer').textContent='—';
+  }
+  if(g.status==='answer_reveal'&&g.answerStats){
+    const stats=g.answerStats; const total=stats.reduce((a,b)=>a+b,0)||1;
+    const bc=document.getElementById('abchart');
+    const ag=document.getElementById('aaag');
+    if(ag) ag.style.display='none';
+    if(bc) bc.innerHTML='<div style="margin-top:20px"><div class="slbl">Répartition des réponses</div>'+stats.map((c,i)=>`
+      <div class="bitem">
+        <div class="bhdr"><span style="color:${ACOL[i]}">${LTR[i]}: ${q.answers[i]}</span><span style="color:var(--muted)">${c}</span></div>
+        <div class="btrack"><div class="bfill" style="width:${c/total*100}%;background:${i===q.correct?'var(--green)':ACOL[i]}">${c>0?c:''}</div></div>
+      </div>`).join('')+'</div>';
+  }
+}
+
+async function aLaunch(){await db.ref('game').update({status:'question',currentQuestion:0,questionStartTime:Date.now()});}
+async function aReveal(){
+  const g=(await db.ref('game').once('value')).val();
+  const stats=[0,0,0,0];
+  (await db.ref('players').once('value')).forEach(c=>{
+    const v=c.val();
+    if(v.lastAnswer&&v.lastAnswer.question===g.currentQuestion) stats[v.lastAnswer.index]++;
+  });
+  await db.ref('game').update({status:'answer_reveal',answerStats:stats});
+}
+async function aNext(){
+  const g=(await db.ref('game').once('value')).val();
+  await db.ref('game').update({status:'question',currentQuestion:g.currentQuestion+1,questionStartTime:Date.now(),answerStats:null});
+}
+async function aLb(){await db.ref('game').update({status:'leaderboard'});}
+async function aEnd(){clearInterval(atIval);await db.ref('game').update({status:'end'});}
+function cpyLink(){
+  const url=`${location.origin}${location.pathname}?pin=${currentPin}`;
+  navigator.clipboard.writeText(url).then(()=>toast('✅ Lien copié !'));
+}
+
+// ========== CONFETTI ==========
+function launchConfetti(){
+  const cv=document.getElementById('cc');
+  cv.width=window.innerWidth; cv.height=window.innerHeight;
+  const ctx=cv.getContext('2d');
+  const cols=['#ff453a','#0a84ff','#ff9f0a','#30d158','#bf5af2','#fff'];
+  const ps=Array.from({length:130},()=>({
+    x:Math.random()*cv.width,y:-20-Math.random()*200,
+    w:7+Math.random()*8,h:11+Math.random()*8,
+    col:cols[0|Math.random()*cols.length],
+    rot:Math.random()*360,rv:(Math.random()-.5)*8,
+    vx:(Math.random()-.5)*4,vy:2+Math.random()*4,alpha:1
+  }));
+  let raf;
+  function draw(){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    let alive=false;
+    ps.forEach(p=>{
+      if(p.y<cv.height+40){alive=true;p.y+=p.vy;p.x+=p.vx;p.rot+=p.rv;p.vy+=.05;}
+      else p.alpha=Math.max(0,p.alpha-.008);
+      ctx.save();ctx.globalAlpha=p.alpha;ctx.translate(p.x,p.y);ctx.rotate(p.rot*Math.PI/180);
+      ctx.fillStyle=p.col;ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);ctx.restore();
+    });
+    if(alive) raf=requestAnimationFrame(draw);
+  }
+  draw();
+  setTimeout(()=>{cancelAnimationFrame(raf);ctx.clearRect(0,0,cv.width,cv.height);},5500);
+}
+</script>
+</body>
+</html>
