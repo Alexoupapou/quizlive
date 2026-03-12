@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>FBI — Test de recrutement</title>
+<title>FBI — Test de recrutement v3</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/wordcloud2.js/1.2.2/wordcloud2.min.js"></script>
 <style>
@@ -407,7 +407,18 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;heigh
 <div id="loading">
   <div class="spin"></div>
   <div style="font-family:'Share Tech Mono',monospace;font-size:.62rem;color:var(--text3);letter-spacing:2px;">CONNEXION FBI...</div>
+  <div style="font-family:'Share Tech Mono',monospace;font-size:.5rem;color:var(--text3);margin-top:8px;opacity:.4;">v3</div>
 </div>
+<script>
+setTimeout(function(){
+  var l=document.getElementById('loading');
+  if(l&&l.style.display!=='none'){
+    l.style.display='none';
+    var j=document.getElementById('join');
+    if(j)j.style.cssText='display:flex!important;';
+  }
+},6000);
+</script>
 <div id="toast"></div>
 
 <!-- ══════════ PIN SCREEN ══════════ -->
@@ -767,7 +778,7 @@ window.addEventListener('DOMContentLoaded',async()=>{
       </div>`;
     return;
   }
-  setTimeout(()=>{$('loading').classList.add('hide');setTimeout(()=>$('loading').style.display='none',400);},300);
+  $('loading').style.display='none';
 
   if(isLiveRoute){showScreen('live');initLive();}
   else if(isAdminRoute){
