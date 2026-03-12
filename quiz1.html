@@ -38,7 +38,7 @@ html,body{background:var(--navy);color:var(--text);font-family:'Oswald',sans-ser
 .lobby{display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;width:100%;}
 .lobby-top{display:flex;gap:48px;align-items:center;justify-content:center;flex-wrap:wrap;}
 .lobby-qr-block{display:flex;flex-direction:column;align-items:center;gap:10px;}
-#lobby-qr{padding:10px;background:#fff;border-radius:8px;}
+#lobby-qr{padding:20px;background:#ffffff;border-radius:10px;box-shadow:0 0 0 6px #ffffff;}
 .lobby-pin-block{display:flex;flex-direction:column;align-items:flex-start;gap:6px;}
 .lobby-label{font-size:.6rem;color:var(--muted);letter-spacing:3px;text-transform:uppercase;}
 #lobby-pin{font-family:'Share Tech Mono';font-size:3.5rem;color:var(--gold);letter-spacing:14px;}
@@ -2371,7 +2371,7 @@ function renderLobby(pin,players){
       <div class="space-hint">▶ ESPACE POUR LANCER LE QUIZ</div>
     </div>`;
   if(!document.querySelector('#lobby-qr canvas')){
-    try{new QRCode($('lobby-qr'),{text:url,width:200,height:200,colorDark:'#C8A951',colorLight:'#0A0E1A'});}catch{}
+    try{new QRCode($('lobby-qr'),{text:url,width:220,height:220,colorDark:'#000000',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.H});}catch{}
   }
   $('pres-timer-bar').style.width='100%';
   $('bottom-hint').textContent='ESPACE — LANCER';
@@ -2662,9 +2662,8 @@ function renderPlayer(game){
   if(game.status==='lobby'){
     main.innerHTML=`<div class="wait"><div class="wdot"></div><h2>CONNECTÉ</h2><p>En attente du lancement...</p></div>`;return;}
   if(game.status==='countdown'){
-    const rem=Math.max(0,Math.ceil((game.countdownEnd-Date.now())/1000));
-    main.innerHTML=`<div class="wait"><div id="p-cd" style="font-family:'Share Tech Mono';font-size:4rem;color:var(--gold);">${rem}</div><p>Prochaine question</p></div>`;
-    const ci=setInterval(()=>{const r=Math.max(0,Math.ceil((game.countdownEnd-Date.now())/1000));const e=$('p-cd');if(e)e.textContent=r;if(r<=0)clearInterval(ci);},200);return;}
+    main.innerHTML=`<div class="wait"><div class="wdot"></div><h2>QUESTION SUIVANTE</h2><p>Préparez-vous...</p></div>`;
+    return;}
   if(game.status==='question'&&game.currentQuestion>=0){
     if(pAnswered>=game.currentQuestion){
       main.innerHTML=`<div class="wait"><div style="font-size:2.5rem;">✓</div><h2>RÉPONSE ENVOYÉE</h2><p>En attente...</p></div>`;
